@@ -1,2 +1,11 @@
 # ignore local build system
 Makefile
+
+# ignore virtualenv
+bin/
+lib/
+pip-selfcheck.json
+pyvenv.cfg
+
+# ignore OS files
+.DS_Store
