@@ -1,4 +1,4 @@
-#!usr/bin/env python3
+#!/usr/bin/env python3
 
 """Crawl streetgeometries from OSM
 
@@ -11,6 +11,7 @@ __license__ = "GPLv3"
 
 from overpy import Overpass
 from itertools import chain
+from uuid import uuid4
 
 class Street:
     def __init__(self, name, line):
@@ -23,8 +24,13 @@ class Street:
             return 'MULTILINESTRING({})'.format(','.join(map(lambda x: x.getWKT(), self.lines)))
         else:
             return 'LINESTRING' + self.lines[0].getWKT()
+    def getCSV(self, uuid):
+        return '{},"{}","{}"'.format(uuid, self.name, self.getWKT())
     def __str__(self):
         return ('Street(name="%s" wkt="%s")' % (self.name, self.getWKT()))
+    @staticmethod
+    def getCSVHeader():
+        return 'location_id,name,geometry'
 
 
 class Line:
@@ -33,7 +39,7 @@ class Line:
     def addPoint(self, lat, lng):
         self.points.append((lat, lng))
     def getWKT(self):
-        return '({})'.format(','.join(map(lambda x: str(float(x)), chain(*self.points))))
+        return '({})'.format(','.join(map(lambda x: "{:f} {:f}".format(*x), self.points)))
     def __str__(self):
         return str(self.points)
 
@@ -143,6 +149,9 @@ class StreetCrawler:
         return streets
 
 if __name__ == "__main__":
-    streets = StreetCrawler.getStreets()
-    for s in streets.values():
-        print(s)
+    import sys
+    if 2 > len(sys.argv):
+        print("Usage: ./{} outputfile.csv".format(sys.argv[0]))
+    else:
+        with open(sys.argv[1], 'x') as f:
+            f.write('{}\n'.format(Street.getCSVHeader()) + '\n'.join(map(lambda x: x.getCSV(uuid4()), StreetCrawler.getStreets().values())))
