@@ -15,6 +15,7 @@ from uuid import uuid4
 
 class Street:
     def __init__(self, name, line):
+        self.uuid = uuid4()
         self.name = name
         self.lines = [line]
     def addLine(self, line):
@@ -24,8 +25,8 @@ class Street:
             return 'MULTILINESTRING({})'.format(','.join(map(lambda x: x.getWKT(), self.lines)))
         else:
             return 'LINESTRING' + self.lines[0].getWKT()
-    def getCSV(self, uuid):
-        return '{},"{}","{}"'.format(uuid, self.name, self.getWKT())
+    def getCSV(self):
+        return '{},"{}","{}"'.format(self.uuid, self.name, self.getWKT())
     def __str__(self):
         return ('Street(name="%s" wkt="%s")' % (self.name, self.getWKT()))
     @staticmethod
@@ -37,7 +38,7 @@ class Line:
     def __init__(self):
         self.points = []
     def addPoint(self, lat, lng):
-        self.points.append((lat, lng))
+        self.points.append((lng, lat))
     def getWKT(self):
         return '({})'.format(','.join(map(lambda x: "{:f} {:f}".format(*x), self.points)))
     def __str__(self):
@@ -76,6 +77,10 @@ class StreetCrawler:
         <bbox-query {0}/>
       </query>
       <query type="way">
+        <has-kv k="highway" v="path"/>
+        <bbox-query {0}/>
+      </query>
+      <query type="way">
         <has-kv k="highway" v="living_street"/>
         <bbox-query {0}/>
       </query>
@@ -90,10 +95,6 @@ class StreetCrawler:
       </query>
       <query type="way">
         <has-kv k="highway" v="tertiary"/>
-        <bbox-query {0}/>
-      </query>
-      <query type="way">
-        <has-kv k="highway" v="residential"/>
         <bbox-query {0}/>
       </query>
       <query type="way">
@@ -154,4 +155,4 @@ if __name__ == "__main__":
         print("Usage: ./{} outputfile.csv".format(sys.argv[0]))
     else:
         with open(sys.argv[1], 'x') as f:
-            f.write('{}\n'.format(Street.getCSVHeader()) + '\n'.join(map(lambda x: x.getCSV(uuid4()), StreetCrawler.getStreets().values())))
+            f.write('{}\n'.format(Street.getCSVHeader()) + '\n'.join(map(lambda x: x.getCSV(), StreetCrawler.getStreets().values())))
