@@ -15,10 +15,10 @@ from urllib.parse import quote
 from lxml import etree
 import re
 import csv
-from calendar import Calendar
 from datetime import date as Date
 from datetime import timedelta as Timedelta
 from itertools import chain, repeat
+from uuid import uuid4
 import sys
 
 class AwsRow:
@@ -70,13 +70,13 @@ class AwsRow:
             (self.street, self.yardWaste, self.residualWaste, self.bioWaste, self.greenBinAndYellowBag)
     def __setattr__(self, name, value):
         self.__dict__[name] = re.sub('\s+', ' ', value).strip()
-    def getCSV(self):
-        return '\n'.join('"{}","{}",{}'.format(typ, date, self.geoId) for typ, date in chain(
-                zip(repeat('yard_waste'), self.iterMultibleByDayMonthString(self.yardWaste, 2015)),
-                zip(repeat('other'), self.iterWeeklyByDayString(self.residualWaste, 2015)),
-                zip(repeat('organic'), self.iterWeeklyByDayString(self.bioWaste, 2015)),
-                zip(repeat('paper'), self.iterBiweeklyByDayWeekString(self.greenBinAndYellowBag, 2015)),
-                zip(repeat('plastic'), self.iterBiweeklyByDayWeekString(self.greenBinAndYellowBag, 2015))))
+    def getCSV(self, count):
+        return '\n'.join('{},"{}","{}",{}'.format(uuid4(), typ, date, self.geoId) for typ, date in chain(
+                zip(repeat('yard_waste'), self.iterMultibleByDayMonthString(self.yardWaste, Date.today(), count)),
+                zip(repeat('other'), self.iterWeeklyByDayString(self.residualWaste, Date.today(), count)),
+                zip(repeat('organic'), self.iterWeeklyByDayString(self.bioWaste, Date.today(), count)),
+                zip(repeat('paper'), self.iterBiweeklyByDayWeekString(self.greenBinAndYellowBag, Date.today(), count)),
+                zip(repeat('plastic'), self.iterBiweeklyByDayWeekString(self.greenBinAndYellowBag, Date.today(), count))))
 
     @classmethod
     def _getRealIsodate(cls, isodate):
@@ -86,44 +86,60 @@ class AwsRow:
             return isodate
 
     @classmethod
-    def iterWeeklyByDayString(cls, day, year):
+    def iterWeeklyByDayString(cls, day, dateBegin, count=0):
         try:
-            date = cls._getFirstDateForWeekDay(year, cls.days[day])
+            date = cls._getNextDateForWeekday(dateBegin, cls.days[day])
         except KeyError:
             return
-        while date.year == year:
+        n = 0
+        while n < count or count == 0:
             yield date
+            n += 1
             date += cls.week
     @classmethod
-    def iterMultibleByDayMonthString(cls, daymonth, year):
-        dates = daymonth.split(' ')
-        for date in dates:
-            match = re.match('(\d{2}).(\d{2}).', date)
+    def iterMultibleByDayMonthString(cls, daymonth, dateBegin, count=0):
+        datesStr = daymonth.split(' ')
+        year = dateBegin.year
+        dates = []
+        for dateStr in datesStr:
+            match = re.match('(\d{2}).(\d{2}).', dateStr)
             if not match:
-                return
+                continue
             day, month = match.group(1, 2)
-            yield Date(year, int(month), int(day))
+            dates.append(Date(year, int(month), int(day)))
+        n = 0
+        dates.sort()
+        while True:
+            for date in dates:
+                if date < dateBegin:
+                    continue
+                yield Date(year, int(date.month), int(date.day))
+                n += 1
+                if count != 0 and n >= count:
+                    return
+            year += 1
     @classmethod
-    def iterBiweeklyByDayWeekString(cls, dayweek, year):
+    def iterBiweeklyByDayWeekString(cls, dayweek, dateBegin, count=0):
         dayweekArr = dayweek.split('/')
         if len(dayweekArr) == 1:
-            yield from cls.iterWeeklyByDayString(dayweekArr[0], year)
+            yield from cls.iterWeeklyByDayString(dayweekArr[0], dateBegin, count)
             return
         try:
-            date = cls._getFirstDateForWeekDay(year, cls.days[dayweekArr[0]])
+            date = cls._getNextDateForWeekday(dateBegin, cls.days[dayweekArr[0]])
         except KeyError:
             return
         date += cls.evenOffset[dayweekArr[1]]
-        while date.year == year:
+        n = 0
+        while n < count or count == 0:
             yield date
+            n += 1
             date += cls.twoWeek
     @staticmethod
-    def _getFirstDateForWeekDay(year, day):
-        date = Date(year, 1, 1)
-        return date + Timedelta((7 - date.weekday()) % 7 + day)
+    def _getNextDateForWeekday(dateBegin, day):
+        return dateBegin + Timedelta((7 - dateBegin.weekday()) % 7 + day)
     @staticmethod
     def getCSVHeader():
-        return 'type,date,location_id'
+        return 'event_id,type,date,location_id'
 
 from collections import defaultdict
 
@@ -224,8 +240,8 @@ class Street:
         return 'location_id,name,geometry'
 
 if __name__ == '__main__':
-    if(4 > len(sys.argv)):
-        print('Usage: ./{} streets_file events_output used_streets_output'.format(sys.argv[0]))
+    if(5 != len(sys.argv)):
+        print('Usage: ./{} streets_file events_output used_streets_output NcollectionsFromToday'.format(sys.argv[0]))
         exit()
     streets = Street.getStreetsDictFromCSV(sys.argv[1])
     collectionsF, streetsF = sys.argv[2], sys.argv[3]
@@ -246,7 +262,7 @@ if __name__ == '__main__':
                 except KeyError:
                     pass
                     # print('Not found: ' + Street.normalizeName(row.street))
-                f.write(row.getCSV() + '\n')
+                f.write(row.getCSV(int(sys.argv[4])) + '\n')
         with open(streetsF, 'x') as f:
             f.write(Street.getCSVHeader() + '\n')
             for street in usedStreets.values():
