@@ -11,38 +11,9 @@ __license__ = "GPLv3"
 
 from overpy import Overpass
 from itertools import chain
-from uuid import uuid4
+from street import Street
+from line import Line
 
-class Street:
-    def __init__(self, name, line):
-        self.uuid = uuid4()
-        self.name = name
-        self.lines = [line]
-    def addLine(self, line):
-        self.lines.append(line)
-    def getWKT(self):
-        if len(self.lines) > 1:
-            return 'MULTILINESTRING({})'.format(','.join(map(lambda x: x.getWKT(), self.lines)))
-        else:
-            return 'LINESTRING' + self.lines[0].getWKT()
-    def getCSV(self):
-        return '{},"{}","{}"'.format(self.uuid, self.name, self.getWKT())
-    def __str__(self):
-        return ('Street(name="%s" wkt="%s")' % (self.name, self.getWKT()))
-    @staticmethod
-    def getCSVHeader():
-        return 'location_id,name,geometry'
-
-
-class Line:
-    def __init__(self):
-        self.points = []
-    def addPoint(self, lat, lng):
-        self.points.append((lng, lat))
-    def getWKT(self):
-        return '({})'.format(','.join(map(lambda x: "{:f} {:f}".format(*x), self.points)))
-    def __str__(self):
-        return str(self.points)
 
 class StreetCrawler:
     osmScript = """<?xml version="1.0" encoding="UTF-8"?>

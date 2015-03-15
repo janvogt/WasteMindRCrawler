@@ -1,0 +1,69 @@
+#!/usr/bin/env python3
+
+"""Street Class to represent an (uu)id-ed street with name and geometry
+
+Implements support functions for importing and exporting from CSV and name matching"""
+
+__author__ = "Jan Vogt"
+__copyright__ = "Copyright 2015, Jan Vogt"
+__email__ = "jan.vogt@me.com"
+__license__ = "GPLv3"
+
+from uuid import uuid4
+import re
+import csv
+
+class Street:
+    def __init__(self, nameOrRow, uuidOrFields):
+        if isinstance(nameOrRow, str):
+            self.name = nameOrRow
+            self.uuid = uuid4()
+            self.lines = [uuidOrFields]
+            self.wkt = None
+        else:
+            self.name = nameOrRow[uuidOrFields['name']]
+            self.uuid = nameOrRow[uuidOrFields['id']]
+            self.lines = None
+            self.wkt = nameOrRow[uuidOrFields['geometry']]
+    def addLine(self, line):
+        if self.lines:
+            self.lines.append(line)
+        else:
+            raise
+    def getWKT(self):
+        if not self.lines:
+            return self.wkt
+        if len(self.lines) > 1:
+            self.wkt = 'MULTILINESTRING({})'.format(','.join(map(lambda x: x.getWKT(), self.lines)))
+        else:
+            self.wkt = 'LINESTRING' + self.lines[0].getWKT()
+        self.lines = None
+        return self.wkt
+    def getCSV(self):
+        return '{},"{}","{}"'.format(self.uuid, self.name, self.getWKT())
+    def __str__(self):
+        return 'Street(name="{}", wkt="{}", lines="{}", uuid="{}")'.format(self.name, self.wkt, self.lines, self.uuid)
+    @classmethod
+    def getStreetsDictFromCSV(cls, filename):
+        with open(filename, 'r', encoding='utf-8') as f:
+            rows = iter(csv.reader(f))
+            header = next(rows)
+            fields = {'id': header.index('location_id'), 'name': header.index('name'), 'geometry': header.index('geometry')}
+            return {cls.normalizeName(row[fields['name']]): Street(row, fields) for row in csv.reader(f)}
+    @staticmethod
+    def normalizeName(name):
+        normalized = name.lower().replace('ä', 'ae').replace('ö', 'oe').replace('ü', 'ue').replace('ß', 'ss').replace('*', '').replace(' ab ', '').replace('-', ' ').replace('ç', 'c')
+        normalized = re.sub('\(.*?\)', '', normalized)
+        normalized = re.match('.\D+', normalized).group(0).strip()
+        normalized = re.sub('((?<=\w)strasse)|(-str(?!\w))|( str(?!\w))|(-strasse)|(str(?!\w))', ' strasse', normalized)
+        normalized = re.sub('((?<=\w)weg)|(-weg)', ' weg', normalized)
+        normalized = re.sub('((?<=\w)gasse)|(-gasse)', ' gasse', normalized)
+        normalized = re.sub('((?<=\w)gaessle)|(-gaessle)', ' gaessle', normalized)
+        normalized = re.sub('((?<=\w)platz)|(-platz)', ' platz', normalized)
+        normalized = re.sub('((?<=\w)steige)|(-steige)', ' steige', normalized)
+        normalized = re.sub('((?<=\w)ring)|(-ring)', ' ring', normalized)
+        normalized = re.sub('((?<!\w)st\.\s)|((?<!\w)sankt\s)', 'sankt ', normalized)
+        return normalized
+    @staticmethod
+    def getCSVHeader():
+        return 'location_id,name,geometry'

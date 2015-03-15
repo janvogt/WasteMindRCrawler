@@ -20,6 +20,7 @@ from datetime import timedelta as Timedelta
 from itertools import chain, repeat
 from uuid import uuid4
 import sys
+from street import Street
 
 class AwsRow:
     days = {'Mo': 0, 'Di': 1, 'Mi': 2, 'Do': 3, 'Fr': 4, 'Sa': 5, 'So': 6}
@@ -108,12 +109,15 @@ class AwsRow:
             day, month = match.group(1, 2)
             dates.append(Date(year, int(month), int(day)))
         n = 0
+        if len(dates) == 0:
+          return
         dates.sort()
         while True:
             for date in dates:
+                date = Date(year, int(date.month), int(date.day))
                 if date < dateBegin:
                     continue
-                yield Date(year, int(date.month), int(date.day))
+                yield date
                 n += 1
                 if count != 0 and n >= count:
                     return
@@ -141,8 +145,6 @@ class AwsRow:
     def getCSVHeader():
         return 'event_id,type,date,location_id'
 
-from collections import defaultdict
-
 class AwsCrawler:
     typeMap = {'Straße': 'street',
            'Schnitt gut': 'yardWaste',
@@ -150,38 +152,38 @@ class AwsCrawler:
            'Bio tonne': 'bioWaste',
            'Grüne Tonne Gelber Sack gerade/ungerade Kalenderwoche': 'greenBinAndYellowBag'}
     alphabet = 'abcdefghijklmnopqrstuvwxzyäöüß'
-    offsets = {'01-01-2015': '01-02-2015',
-               '01-02-2015': '01-03-2015',
-               '01-06-2015': '01-07-2015',
-               '01-07-2015': '01-08-2015',
-               '01-08-2015': '01-09-2015',
-               '01-09-2015': '01-10-2015',
-               '02-16-2015': '02-17-2015',
-               '02-17-2015': '02-18-2015',
-               '02-18-2015': '02-19-2015',
-               '02-19-2015': '02-20-2015',
-               '02-20-2015': '02-21-2015',
-               '04-03-2015': '04-02-2015',
-               '04-06-2015': '04-07-2015',
-               '04-07-2015': '04-08-2015',
-               '04-08-2015': '04-09-2015',
-               '04-09-2015': '04-10-2015',
-               '04-10-2015': '04-11-2015',
-               '05-01-2015': '05-02-2015',
-               '05-14-2015': '05-15-2015',
-               '05-15-2015': '05-16-2015',
-               '05-25-2015': '05-26-2015',
-               '05-26-2015': '05-27-2015',
-               '05-27-2015': '05-28-2015',
-               '05-28-2015': '05-29-2015',
-               '05-29-2015': '05-30-2015',
-               '06-04-2015': '06-05-2015',
-               '06-05-2015': '06-06-2015',
-               '12-21-2015': '12-19-2015',
-               '12-22-2015': '12-21-2015',
-               '12-23-2015': '12-22-2015',
-               '12-24-2015': '12-23-2015',
-               '12-25-2015': '12-24-2015'}
+    offsets = {'2015-01-01': '2015-01-02',
+               '2015-01-02': '2015-01-03',
+               '2015-01-06': '2015-01-07',
+               '2015-01-07': '2015-01-08',
+               '2015-01-08': '2015-01-09',
+               '2015-01-09': '2015-01-10',
+               '2015-02-16': '2015-02-17',
+               '2015-02-17': '2015-02-18',
+               '2015-02-18': '2015-02-19',
+               '2015-02-19': '2015-02-20',
+               '2015-02-20': '2015-02-21',
+               '2015-04-03': '2015-04-02',
+               '2015-04-06': '2015-04-07',
+               '2015-04-07': '2015-04-08',
+               '2015-04-08': '2015-04-09',
+               '2015-04-09': '2015-04-10',
+               '2015-04-10': '2015-04-11',
+               '2015-05-01': '2015-05-02',
+               '2015-05-14': '2015-05-15',
+               '2015-05-15': '2015-05-16',
+               '2015-05-25': '2015-05-26',
+               '2015-05-26': '2015-05-27',
+               '2015-05-27': '2015-05-28',
+               '2015-05-28': '2015-05-29',
+               '2015-05-29': '2015-05-30',
+               '2015-06-04': '2015-06-05',
+               '2015-06-05': '2015-06-06',
+               '2015-12-21': '2015-12-19',
+               '2015-12-22': '2015-12-21',
+               '2015-12-23': '2015-12-22',
+               '2015-12-24': '2015-12-23',
+               '2015-12-25': '2015-12-24'}
     @classmethod
     def getRows(cls):
         """Throws URLError if download fails"""
@@ -203,41 +205,6 @@ class AwsCrawler:
                         setattr(awsRow, header[i], ' '.join(col.itertext()))
                     AwsRows.append(awsRow)
         return AwsRows
-
-class Street:
-    def __init__(self, name, uuid, row, header):
-        self.name = name
-        self.uuid = uuid
-        self.row = row
-        self.header = header
-    def getCSV(self):
-        return '{},"{}","{}"'.format(*self.row)
-    @classmethod
-    def getStreetsDictFromCSV(cls, filename):
-        with open(filename, 'r', encoding='utf-8') as f:
-            rows = iter(csv.reader(f))
-            header = next(rows)
-            fields = {'location_id': header.index('location_id'), 'name': header.index('name')}
-            return {cls.normalizeName(row[fields['name']]): Street(row[fields['name']], row[fields['location_id']], row, header) for row in csv.reader(f)}
-    def __str__(self):
-        return self.name + ' ' + self.uuid
-    @staticmethod
-    def normalizeName(name):
-        normalized = name.lower().replace('ä', 'ae').replace('ö', 'oe').replace('ü', 'ue').replace('ß', 'ss').replace('*', '').replace(' ab ', '').replace('-', ' ').replace('ç', 'c')
-        normalized = re.sub('\(.*?\)', '', normalized)
-        normalized = re.match('.\D+', normalized).group(0).strip()
-        normalized = re.sub('((?<=\w)strasse)|(-str(?!\w))|( str(?!\w))|(-strasse)|(str(?!\w))', ' strasse', normalized)
-        normalized = re.sub('((?<=\w)weg)|(-weg)', ' weg', normalized)
-        normalized = re.sub('((?<=\w)gasse)|(-gasse)', ' gasse', normalized)
-        normalized = re.sub('((?<=\w)gaessle)|(-gaessle)', ' gaessle', normalized)
-        normalized = re.sub('((?<=\w)platz)|(-platz)', ' platz', normalized)
-        normalized = re.sub('((?<=\w)steige)|(-steige)', ' steige', normalized)
-        normalized = re.sub('((?<=\w)ring)|(-ring)', ' ring', normalized)
-        normalized = re.sub('((?<!\w)st\.\s)|((?<!\w)sankt\s)', 'sankt ', normalized)
-        return normalized
-    @staticmethod
-    def getCSVHeader():
-        return 'location_id,name,geometry'
 
 if __name__ == '__main__':
     if(5 != len(sys.argv)):
