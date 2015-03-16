@@ -72,7 +72,7 @@ class AwsRow:
     def __setattr__(self, name, value):
         self.__dict__[name] = re.sub('\s+', ' ', value).strip()
     def getCSV(self, count):
-        return '\n'.join('{},"{}","{}",{}'.format(uuid4(), typ, date, self.geoId) for typ, date in chain(
+        return '\n'.join('{},"{}","{}",{}'.format(uuid4(), typ, self._getRealIsodate(date.isoformat()), self.geoId) for typ, date in chain(
                 zip(repeat('yard_waste'), self.iterMultibleByDayMonthString(self.yardWaste, Date.today(), count)),
                 zip(repeat('other'), self.iterWeeklyByDayString(self.residualWaste, Date.today(), count)),
                 zip(repeat('organic'), self.iterWeeklyByDayString(self.bioWaste, Date.today(), count)),
@@ -82,7 +82,7 @@ class AwsRow:
     @classmethod
     def _getRealIsodate(cls, isodate):
         try:
-            return cls.offset[isodate]
+            return cls.offsets[isodate]
         except KeyError:
             return isodate
 
@@ -129,10 +129,15 @@ class AwsRow:
             yield from cls.iterWeeklyByDayString(dayweekArr[0], dateBegin, count)
             return
         try:
-            date = cls._getNextDateForWeekday(dateBegin, cls.days[dayweekArr[0]])
+          day = cls.days[dayweekArr[0]]
+          calenderWeekOffset = cls.evenOffset[dayweekArr[1]]
         except KeyError:
             return
-        date += cls.evenOffset[dayweekArr[1]]
+        nextCorrectWeekDay = cls._getNextDateForWeekday(dateBegin, day)
+        if nextCorrectWeekDay.isocalendar()[1] % 2 == 1:
+          date = nextCorrectWeekDay + calenderWeekOffset
+        else:
+          date = nextCorrectWeekDay + (Timedelta(7) + calenderWeekOffset) % Timedelta(14)
         n = 0
         while n < count or count == 0:
             yield date
@@ -140,7 +145,7 @@ class AwsRow:
             date += cls.twoWeek
     @staticmethod
     def _getNextDateForWeekday(dateBegin, day):
-        return dateBegin + Timedelta((7 - dateBegin.weekday()) % 7 + day)
+        return dateBegin + Timedelta(day - dateBegin.weekday()) % Timedelta(7)
     @staticmethod
     def getCSVHeader():
         return 'event_id,type,date,location_id'

@@ -6,6 +6,7 @@ bin/
 lib/
 pip-selfcheck.json
 pyvenv.cfg
+__pycache__
 
 # ignore OS files
 .DS_Store
