@@ -232,8 +232,8 @@ if __name__ == '__main__':
                     usedStreets[street.uuid] = street
                     # print('Match: ' + street.name + ' & ' + row.street)
                 except KeyError:
-                    pass
-                    # print('Not found: ' + Street.normalizeName(row.street))
+                    # pass
+                    print('Not found: ' + Street.normalizeName(row.street))
                 f.write(row.getCSV(int(sys.argv[4])) + '\n')
         with open(streetsF, 'x') as f:
             f.write(Street.getCSVHeader() + '\n')

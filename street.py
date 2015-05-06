@@ -10,39 +10,29 @@ __email__ = "jan.vogt@me.com"
 __license__ = "GPLv3"
 
 from uuid import uuid4
+from multiline import Multiline
 import re
 import csv
 
 class Street:
-    def __init__(self, nameOrRow, uuidOrFields):
+    def __init__(self, nameOrRow, lineOrFields):
         if isinstance(nameOrRow, str):
             self.name = nameOrRow
             self.uuid = uuid4()
-            self.lines = [uuidOrFields]
-            self.wkt = None
+            self.multiline = Multiline()
+            self.addLine(lineOrFields)
         else:
-            self.name = nameOrRow[uuidOrFields['name']]
-            self.uuid = nameOrRow[uuidOrFields['id']]
-            self.lines = None
-            self.wkt = nameOrRow[uuidOrFields['geometry']]
+            self.name = nameOrRow[lineOrFields['name']]
+            self.uuid = nameOrRow[lineOrFields['id']]
+            self.multiline = Multiline(nameOrRow[lineOrFields['geometry']])
     def addLine(self, line):
-        if self.lines:
-            self.lines.append(line)
-        else:
-            raise
+        self.multiline.addLine(line)
     def getWKT(self):
-        if not self.lines:
-            return self.wkt
-        if len(self.lines) > 1:
-            self.wkt = 'MULTILINESTRING({})'.format(','.join(map(lambda x: x.getWKT(), self.lines)))
-        else:
-            self.wkt = 'LINESTRING' + self.lines[0].getWKT()
-        self.lines = None
-        return self.wkt
+        return self.multiline.getWKT()
     def getCSV(self):
         return '{},"{}","{}"'.format(self.uuid, self.name, self.getWKT())
     def __str__(self):
-        return 'Street(name="{}", wkt="{}", lines="{}", uuid="{}")'.format(self.name, self.wkt, self.lines, self.uuid)
+        return 'Street(name="{}", multiline="{}", uuid="{}")'.format(self.name, self.multiline, self.uuid)
     @classmethod
     def getStreetsDictFromCSV(cls, filename):
         with open(filename, 'r', encoding='utf-8') as f:
